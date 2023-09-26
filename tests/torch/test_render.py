@@ -4,12 +4,12 @@ import pytest
 import torch
 from torch import nn
 
-from nnsmith.abstract import AbsTensor, AvgPool2d, DType
-from nnsmith.backends.pt2 import PT2
-from nnsmith.backends.torchjit import TorchJIT
-from nnsmith.gir import GraphIR, InstExpr, Placeholder
-from nnsmith.materialize import Render
-from nnsmith.materialize.torch import TorchModelCPU
+from neuri.abstract import AbsTensor, AvgPool2d, DType
+from neuri.backends.pt2 import PT2
+from neuri.backends.torchjit import TorchJIT
+from neuri.gir import GraphIR, InstExpr, Placeholder
+from neuri.materialize import Render
+from neuri.materialize.torch import TorchModelCPU
 
 
 class CNN(nn.Module):

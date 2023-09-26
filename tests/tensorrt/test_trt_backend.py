@@ -3,11 +3,11 @@ import pytest
 
 has_gpu = len(GPUtil.getGPUs()) > 0
 
-from nnsmith.abstract.dtype import DType
-from nnsmith.backends import BackendFactory
-from nnsmith.graph_gen import model_gen
-from nnsmith.materialize import Model, TestCase
-from nnsmith.narrow_spec import auto_opconfig, auto_opset
+from neuri.abstract.dtype import DType
+from neuri.backends import BackendFactory
+from neuri.graph_gen import model_gen
+from neuri.materialize import Model, TestCase
+from neuri.narrow_spec import auto_opconfig, auto_opset
 
 TestCase.__test__ = False  # supress PyTest warning
 

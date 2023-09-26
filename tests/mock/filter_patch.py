@@ -1,5 +1,5 @@
-from nnsmith.filter import filter
-from nnsmith.materialize import BugReport
+from neuri.filter import filter
+from neuri.materialize import BugReport
 
 
 @filter("test_fn")

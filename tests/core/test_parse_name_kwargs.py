@@ -1,6 +1,6 @@
 import pytest
 
-from nnsmith.backends.factory import parse_name_kwargs
+from neuri.backends.factory import parse_name_kwargs
 
 
 def test_single_invalid():

@@ -1,8 +1,8 @@
 import pytest
 
-from nnsmith.abstract.dtype import DType
-from nnsmith.abstract.op import *
-from nnsmith.gir import *
+from neuri.abstract.dtype import DType
+from neuri.abstract.op import *
+from neuri.gir import *
 
 
 @mark_abstract("test")

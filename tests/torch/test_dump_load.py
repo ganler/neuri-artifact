@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 import torch
 
-from nnsmith.graph_gen import model_gen
-from nnsmith.materialize import Model, Oracle, TestCase
-from nnsmith.narrow_spec import auto_opset
+from neuri.graph_gen import model_gen
+from neuri.materialize import Model, Oracle, TestCase
+from neuri.narrow_spec import auto_opset
 
 TestCase.__test__ = False  # supress PyTest warning
 

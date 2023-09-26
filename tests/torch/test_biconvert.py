@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from nnsmith.materialize.torch.parse import parse
-from nnsmith.materialize.torch.symbolnet import FxTracing, SymbolNet
+from neuri.materialize.torch.parse import parse
+from neuri.materialize.torch.symbolnet import FxTracing, SymbolNet
 
 
 def test_biconvert():

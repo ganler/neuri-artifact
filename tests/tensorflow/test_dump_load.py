@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-from nnsmith.graph_gen import model_gen
-from nnsmith.materialize import TestCase
-from nnsmith.materialize.tensorflow import TFModelCPU, tf_dict_from_np
-from nnsmith.narrow_spec import auto_opset
+from neuri.graph_gen import model_gen
+from neuri.materialize import TestCase
+from neuri.materialize.tensorflow import TFModelCPU, tf_dict_from_np
+from neuri.narrow_spec import auto_opset
 
 TestCase.__test__ = False  # supress PyTest warning
 

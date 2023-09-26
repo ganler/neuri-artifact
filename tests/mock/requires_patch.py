@@ -1,5 +1,5 @@
-from nnsmith.abstract.arith import nnsmith_lt
-from nnsmith.abstract.extension import patch_requires
+from neuri.abstract.arith import nnsmith_lt
+from neuri.abstract.extension import patch_requires
 
 
 @patch_requires("global", "core.NCHWConv2d")

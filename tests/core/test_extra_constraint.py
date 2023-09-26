@@ -1,9 +1,9 @@
 import pytest
 
-from nnsmith.abstract.arith import nnsmith_lt
-from nnsmith.abstract.extension import activate_ext, patch_requires
-from nnsmith.abstract.op import Constant, Input, NCHWConv2d, ReLU
-from nnsmith.graph_gen import model_gen
+from neuri.abstract.arith import nnsmith_lt
+from neuri.abstract.extension import activate_ext, patch_requires
+from neuri.abstract.op import Constant, Input, NCHWConv2d, ReLU
+from neuri.graph_gen import model_gen
 
 
 def test_only_conv_relu():
