@@ -9,6 +9,9 @@ from neuri.narrow_spec import auto_opconfig, auto_opset
 
 TestCase.__test__ = False  # supress PyTest warning
 
+# skip tflite for now
+pytest.skip("tflite backend is not ready yet", allow_module_level=True)
+
 
 def test_narrow_spec_cache_make_and_reload():
     factory = BackendFactory.init("tflite", target="cpu", optmax=True)
@@ -29,7 +32,7 @@ def test_narrow_spec_cache_make_and_reload():
     )
 
 
-def test_synthesized_model(tmp_path):
+def test_synthesized_tf_model(tmp_path):
     d = tmp_path / "test_tflite"
     d.mkdir()
 

@@ -1,7 +1,10 @@
 import GPUtil
 import pytest
 
-has_gpu = len(GPUtil.getGPUs()) > 0
+if not GPUtil.getAvailable():
+    pytest.skip(
+        "Skipping TensorRT tests due to no GPU detected.", allow_module_level=True
+    )
 
 from neuri.abstract.dtype import DType
 from neuri.backends import BackendFactory
@@ -12,7 +15,6 @@ from neuri.narrow_spec import auto_opconfig, auto_opset
 TestCase.__test__ = False  # supress PyTest warning
 
 
-@pytest.mark.skipif(not has_gpu, reason="Skipping TensorRT testing due to no GPU found")
 def test_narrow_spec_cache_make_and_reload():
     factory = BackendFactory.init("tensorrt", target="cuda", optmax=True)
     ONNXModel = Model.init("onnx")
@@ -32,7 +34,6 @@ def test_narrow_spec_cache_make_and_reload():
     )
 
 
-@pytest.mark.skipif(not has_gpu, reason="Skipping TensorRT testing due to no GPU found")
 def test_synthesized_onnx_model(tmp_path):
     d = tmp_path / "test_trt_onnx"
     d.mkdir()

@@ -3,7 +3,8 @@ import pytest
 import torch
 
 from neuri.graph_gen import model_gen
-from neuri.materialize import Model, Oracle, TestCase
+from neuri.materialize import Oracle, TestCase
+from neuri.materialize.onnx import ONNXModel
 from neuri.narrow_spec import auto_opset
 
 TestCase.__test__ = False  # supress PyTest warning
@@ -22,15 +23,13 @@ def test_onnx_load_dump(tmp_path):
     d = tmp_path / "test_onnx_load_dump"
     d.mkdir()
 
-    ONNXModelCPU = Model.init("onnx")
-
     gen = model_gen(
-        opset=auto_opset(ONNXModelCPU),
+        opset=auto_opset(ONNXModel),
         seed=54341,
         max_nodes=5,
     )
 
-    model = ONNXModelCPU.from_gir(gen.make_concrete())
+    model = ONNXModel.from_gir(gen.make_concrete())
 
     assert model.with_torch
 
@@ -55,14 +54,13 @@ def test_bug_report_load_dump(tmp_path):
     d = tmp_path / "test_onnx_load_dump"
     d.mkdir()
 
-    ONNXModelCPU = Model.init("onnx")
     gen = model_gen(
-        opset=auto_opset(ONNXModelCPU),
+        opset=auto_opset(ONNXModel),
         seed=5341,
         max_nodes=5,
     )
 
-    model = ONNXModelCPU.from_gir(gen.make_concrete())
+    model = ONNXModel.from_gir(gen.make_concrete())
 
     assert model.with_torch
 
