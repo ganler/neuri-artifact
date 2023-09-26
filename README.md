@@ -37,7 +37,7 @@ See [links to real-world bug reports](docs/rq3-bug-reports.md).
 # 💡 Get Docker image from Docker Hub
 docker pull ganler/neuri-fse23-ae:latest
 # 💡 [Alternative] load image from https://doi.org/10.5281/zenodo.8319975
-# 1. Install and "unzip" the package 
+# 1. Install and "unzip" the package
 # 2. Run `docker load --input neuri-image-fse23.tar.gz`
 
 # Run Docker image
@@ -262,6 +262,14 @@ python3 table4.py
 ```
 
 Check the terminal output for the results.
+
+## Documentation for reusing NeuRI
+
+1. [**Command-line usages**](docs/cli.md)
+2. [**Basic concept of operator rules**](docs/concept.md)
+3. [**Logging and errors**](docs/log-and-err.md)
+4. **Test-as-documentation:** detailed internal APIs usages can be learnt through our test-suite at `tests/`
+5. [**Known issues**](docs/known-issues.md)
 
 ## Learning More
 
