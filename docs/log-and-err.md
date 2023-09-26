@@ -16,21 +16,21 @@ The show messages above "INFO" level (see [Python's logging module](https://docs
 
 ```shell
 # Show debug information related to `fuzz`:
-${NNSMITH_CMD} hydra.verbose=fuzz
+${NEURI_CMD} hydra.verbose=fuzz
 # Show debug info for `fuzz` and `exec`:
-${NNSMITH_CMD} hydra.verbose="[fuzz,exec]"
+${NEURI_CMD} hydra.verbose="[fuzz,exec]"
 ```
 
 #### Where the log is?
 
-By default, NNSmith logs things both in `console` and `file`. You can find the loggings in [`outputs/${DATE}/${APP}.log`](https://hydra.cc/docs/1.2/tutorials/basic/running_your_app/working_directory/) (current working directory).
+By default, NeuRI logs things both in `console` and `file`. You can find the loggings in [`outputs/${DATE}/${APP}.log`](https://hydra.cc/docs/1.2/tutorials/basic/running_your_app/working_directory/) (current working directory).
 
 ## Errors
 
-See `nnsmith/error.py`:
+See `neuri/error.py`:
 
 - `ConstraintError`: Unsatisfiable constraints which is a hint to re-try;
-- `InternalError`: NNSmith has some internal bugs that should be fixed.
+- `InternalError`: NeuRI has some internal bugs that should be fixed.
 
 Takeways:
 

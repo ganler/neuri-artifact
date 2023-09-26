@@ -1,5 +1,3 @@
-# Development Guide of NNSmith
-
 ## Bug Report Format
 
 *To be standardarized.*

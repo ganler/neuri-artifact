@@ -2,34 +2,34 @@
 
 ```shell
 # Generate 5-node onnx model.
-nnsmith.model_gen mgen.max_nodes=5 model.type=onnx debug.viz=true
-# See: nnsmith_output/* (default output folder)
+python neuri/cli/model_gen.py mgen.max_nodes=5 model.type=onnx debug.viz=true
+# See: neuri_output/* (default output folder)
 
 # TensorFlow model.
-nnsmith.model_gen debug.viz=true model.type=tensorflow
+python neuri/cli/model_gen.py debug.viz=true model.type=tensorflow
 
 # User-spec. output directory
-nnsmith.model_gen debug.viz=true model.type=tensorflow mgen.save=tf_output
+python neuri/cli/model_gen.py debug.viz=true model.type=tensorflow mgen.save=tf_output
 ```
 
 ## Locally debug a model
 
 ```python
 # Generate a onnx model
-nnsmith.model_gen model.type=onnx mgen.max_nodes=5
+python neuri/cli/model_gen.py model.type=onnx mgen.max_nodes=5
 
 # Check the model
 pip install onnxruntime # use ONNXRuntime to execute the model
-nnsmith.model_exec model.type=onnx backend.type=onnxruntime model.path=nnsmith_output/model.onnx
+python neuri/cli/model_exec.py model.type=onnx backend.type=onnxruntime model.path=neuri_output/model.onnx
 # `model.path` should point to the exact model, instead of a folder.
 # It will first compile and run to see if there's any bug.
 # By default it will search `oracle.pkl` and do verification.
 
 # Check the model and do diff testing with tvm
-nnsmith.model_exec  model.type=onnx                        \
-                    backend.type=onnxruntime               \
-                    model.path=nnsmith_output/model.onnx   \
-                    cmp.with='{type:tvm, optmax:true, target:cpu}'
+python neuri/cli/model_exec.py  model.type=onnx                        \
+                                backend.type=onnxruntime               \
+                                model.path=neuri_output/model.onnx   \
+                                cmp.with='{type:tvm, optmax:true, target:cpu}'
 ```
 
 ## Experimental: Gradient checking
@@ -44,14 +44,14 @@ Many compilers do not support a full set of operators (in ONNX and TensorFlow). 
 
 ```shell
 # Infer the support set of onnxruntime to ONNX format.
-nnsmith.dtype_test model.type="onnx" backend.type="onnxruntime"
-# Results are often cached in `~/.cache/nnsmith`.
+python neuri/cli/dtype_test.py model.type="onnx" backend.type="onnxruntime"
+# Results are often cached in `~/.cache/neuri`.
 ```
 
 ## Fuzzing
 
 ```shell
-nnsmith.fuzz fuzz.time=30s model.type=onnx backend.type=tvm fuzz.root=fuzz_report debug.viz=true
+python neuri/cli/fuzz.py fuzz.time=30s model.type=onnx backend.type=tvm fuzz.root=fuzz_report debug.viz=true
 # Bug reports are stored in `./fuzz_report`.
 ```
 
@@ -63,19 +63,20 @@ To limit:
 - only include Conv2d and ReLU.
 
 ```shell
-yes | nnsmith.model_gen model.type=torch mgen.method=symbolic-cinit \
-                                         mgen.rank_choices="[4]"    \
-                                         mgen.dtype_choices="[f32]" \
-                                         mgen.include="[core.NCHWConv2d, core.ReLU]" \
-                                         debug.viz=true
+yes | python neuri/cli/model_gen.py model.type=torch           \
+                                    mgen.method=symbolic-cinit \
+                                    mgen.rank_choices="[4]"    \
+                                    mgen.dtype_choices="[f32]" \
+                                    mgen.include="[core.NCHWConv2d, core.ReLU]" \
+                                    debug.viz=true
 ```
 
 ## Add extra constraints
 
 ```shell
 # Create patch file as `patch.py`
-echo 'from nnsmith.abstract.arith import nnsmith_lt
-from nnsmith.abstract.extension import patch_requires
+echo 'from neuri.abstract.arith import nnsmith_lt
+from neuri.abstract.extension import patch_requires
 
 
 @patch_requires("global", "core.NCHWConv2d")
@@ -84,12 +85,12 @@ def limit_conv2d(self, _):
     return [nnsmith_lt(3, self.kernel_h_size), nnsmith_lt(3, self.kernel_w_size)]
 ' > patch.py
 # Apply the patch with `mgen.patch_requires=./tests/mock/requires_patch.py` (can also be a list of paths)
-yes | nnsmith.model_gen model.type=torch mgen.method=symbolic-cinit \
-                                         mgen.rank_choices="[4]"    \
-                                         mgen.dtype_choices="[f32]" \
-                                         mgen.include="[core.NCHWConv2d, core.ReLU]" \
-                                         mgen.patch_requires=./patch.py \
-                                         debug.viz=true
+yes | python neuri/cli/model_gen.py model.type=torch mgen.method=symbolic-cinit \
+                                                     mgen.rank_choices="[4]"    \
+                                                     mgen.dtype_choices="[f32]" \
+                                                     mgen.include="[core.NCHWConv2d, core.ReLU]" \
+                                                     mgen.patch_requires=./patch.py \
+                                                     debug.viz=true
 ```
 
 ## Misc
