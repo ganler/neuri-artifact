@@ -192,11 +192,11 @@ Check the terminal output for the results.
 #### Figure 6 (a)
 
 ```bash
-python experiments/viz_merged_cov.py --folders             \
-        $(pwd)/gen/torch-symbolic-cinit-n5.models/coverage \
-        $(pwd)/gen/torch-neuri-r-n5.models/coverage        \
-        $(pwd)/gen/torch-neuri-i-n5.models/coverage        \
-        $(pwd)/gen/torch-neuri-n5.models/coverage          \
+python experiments/viz_merged_cov.py --folders                  \
+        $(pwd)/gen/tensorflow-symbolic-cinit-n5.models/coverage \
+        $(pwd)/gen/tensorflow-neuri-r-n5.models/coverage        \
+        $(pwd)/gen/tensorflow-neuri-i-n5.models/coverage        \
+        $(pwd)/gen/tensorflow-neuri-n5.models/coverage          \
     --tags '\textsc{NNSmith}' '\textsc{NeuRI}$^r$' '\textsc{NeuRI}$^i$'  '\textsc{NeuRI}'
 ```
 
@@ -205,11 +205,11 @@ Check images under `./results/branch_cov-time.png` for the results.
 #### Figure 6 (b)
 
 ```bash
-python experiments/viz_merged_cov.py --folders                  \
-        $(pwd)/gen/tensorflow-symbolic-cinit-n5.models/coverage \
-        $(pwd)/gen/tensorflow-neuri-r-n5.models/coverage        \
-        $(pwd)/gen/tensorflow-neuri-i-n5.models/coverage        \
-        $(pwd)/gen/tensorflow-neuri-n5.models/coverage          \
+python experiments/viz_merged_cov.py --folders             \
+        $(pwd)/gen/torch-symbolic-cinit-n5.models/coverage \
+        $(pwd)/gen/torch-neuri-r-n5.models/coverage        \
+        $(pwd)/gen/torch-neuri-i-n5.models/coverage        \
+        $(pwd)/gen/torch-neuri-n5.models/coverage          \
     --tags '\textsc{NNSmith}' '\textsc{NeuRI}$^r$' '\textsc{NeuRI}$^i$'  '\textsc{NeuRI}'
 ```
 
