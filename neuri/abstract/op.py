@@ -288,14 +288,15 @@ class AbsOpBase(ABC):
     def __init__(self):
         assert self.dialect, "Set dialect with `mark_dialect` or `mark_realize`"
 
-        # `[3, 3]` this means this op requires 2 inputs. Where the 1st one has 2 dimensions, and the 2nd one has 3 dimensions.
-        # `-1` means arbitrary dimantions; NOTE: but should be concretized during execution.
-        # All symbols of correponding operator must be the constructor's parameters.
-        # [ <inp0>(support_dim0, support_dim1, ...), <inp1>(...), ... ]
         self.inp_ranks = []
-        # NOTE: the concrete values of out_ranks are not useful. Just make sure the length is correct.
-        # NOTE: the output shape of input dimensions should be concretized during the execution.
         self.out_ranks = []
+        # The format is like [ Tuple[int, ...], Tuple[int, ...], ... ]
+        # where the i-th tuple is the plausible ranks of the i-th input
+        # e.g., for avgpool2d, inp_ranks = [(4,)] means that the inputs must be a single 4-dim tensor.
+        # There are also utility functions like `rank_from`, `rank_range`, `rank_until`, `rank_all` to
+        # simplify the specification.
+        # e.g., for add, inp_ranks = [rank_all(), rank_all()] means that the inputs can be any rank.
+
         # NOTE: the input of operator constructors are all Union[int, z3.ExprRef].
         self.extra_attrs = {}
         self._input_like = [None] * self.n_input()
