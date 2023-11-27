@@ -57,7 +57,9 @@ if __name__ == "__main__":
         )
         matches = regex.findall(r.text)
         for match in matches:
-            api = match[0]
+            api: str = match[0]
+            if api.endswith("_"):
+                continue  # skip
             if api in BLOCK_LIST:
                 continue  # skip
             doc = parse_doc(f"https://pytorch.org/docs/stable/{match[1]}")
@@ -67,6 +69,8 @@ if __name__ == "__main__":
 
     print(len(docs), "API docs fetched")
     prefix = os.path.join(os.path.dirname(__file__), "prompts")
+    if not os.path.exists(prefix):
+        os.mkdir(prefix)
     for api, doc in docs.items():
         with open(os.path.join(prefix, f"{api}.yaml"), "w") as f:
             yaml.dump({"api": api, "doc": doc}, f)

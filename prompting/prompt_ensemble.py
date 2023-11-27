@@ -1,8 +1,7 @@
 import yaml
 import os
 
-BASIC_INTRO = R'''You are an expert in PyTorch programming. Now we want to extract and symbolize properties of some PyTorch functions.
-Overall, the property describes (i) how the data types and shapes of input tensors are transformed (`type_transfer`); and (ii) what constraints
+BASIC_INTRO = R'''Overall, we want you to extract properties that describe (i) how the data types and shapes of input tensors are transformed (`type_transfer`); and (ii) what constraints
 must be satisfied between the input tensors and the operator attributes in order to make the computation valid (`requires`).
 The property is specified in a class that inherits from `AbsOpBase` below:
 
@@ -223,7 +222,6 @@ Examples:
 >>> print(output.size())
 torch.Size([128, 30])
 """
-@mark_materialize("torch")
 class Linear(UnaryOpBase):
     in_dtypes = [(DType.float32,)]
     out_dtypes = [(DType.float32,)]
@@ -255,7 +253,7 @@ class Linear(UnaryOpBase):
     ) -> List[Tuple[int, DType]]:
         return [(out_abs_tensor[0].ndims, DType.float32)]
 
-# !Translate the spec marked by `mark_materialize` into a callable in PyTorch
+# !Translate the spec into a callable in PyTorch
 def forward_fn(op: Linear) -> Callable:
     return torch.nn.Linear(in_features=op.ifeat, out_features=op.ofeat)
 ```
@@ -294,8 +292,6 @@ tensor([1, 2, 3, 4, 5, 6, 7, 8])
 tensor([[1, 2, 3, 4],
         [5, 6, 7, 8]])
 """
-
-@mark_materialize("torch")
 class Flatten(UnaryOpBase):
     # It is compatible to all data types
     in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
@@ -323,7 +319,7 @@ class Flatten(UnaryOpBase):
         # The rank of output tensor is 1 anyways such that the input ranks can be any of the input ranks.
         return [(random.randint(self.inp_ranks[0], self.inp_ranks[-1]), out_abs_tensor[0].dtype)]
 
-# !Translate the spec marked by `mark_materialize` into a callable in PyTorch
+# !Translate the spec into a callable in PyTorch
 def forward_fn(op: Flatten) -> Callable:
     return torch.Tensor.flatten
 ```
@@ -405,8 +401,6 @@ torch.Size([10, 3, 5])
 >>> torch.matmul(tensor1, tensor2).size()
 torch.Size([10, 3, 5])
 """
-
-@mark_materialize("torch")
 class MatMul(BinaryOpBase):
     in_dtypes = [
         (i, i)
@@ -493,7 +487,7 @@ class MatMul(BinaryOpBase):
             (ranks[2] + ranks[3], out_abs_tensor[0].dtype),
         ]
 
-# !Translate the spec marked by `mark_materialize` into a callable in PyTorch
+# !Translate the spec into a callable in PyTorch
 def forward_fn(op: MatMul) -> Callable:
     return torch.matmul
 ```
@@ -555,7 +549,7 @@ torch.Size([3, 3, 8, 4])
 >>> print(out.size())
 torch.Size([3, 9, 7, 3])
 """
-class Pad(UnaryOpBase):
+class Pad(UnaryOpBase, ABC):
     num_var_param = _pad_num_var_param()
     in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
     out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
@@ -601,12 +595,10 @@ class Pad(UnaryOpBase):
     ) -> List[Tuple[int, DType]]:
         return [(out_abs_tensor[0].ndims, out_abs_tensor[0].dtype)]
 
-@mark_materialize("torch")
 class ConstPad(Pad):
     def __init__(self, *padding_list):
         super().__init__(padding_list, "constant")
 
-@mark_materialize("torch")
 class ReplicatePad(Pad):
     num_var_param = _pad_num_var_param(2, max=6)
 
@@ -615,7 +607,6 @@ class ReplicatePad(Pad):
         self.inp_ranks = [rank_range(len(padding_list) // 2 + 1, 4)]
         self.out_ranks = [rank_range(len(padding_list) // 2 + 1, 4)]
 
-@mark_materialize("torch")
 class ReflectPad(Pad):
     num_var_param = _pad_num_var_param(2, max=6)
 
@@ -637,7 +628,7 @@ class ReflectPad(Pad):
             cons.append(nnsmith_ge(pad[i * 2] * pad[i * 2 + 1], 0))
         return cons
 
-# !Translate the spec marked by `mark_materialize` into a callable in PyTorch
+# !Translate the spec into a callable in PyTorch
 def forward_fn(op: Pad):
     if op.extra_attrs["type"] == "constant":
         # 0 easily cause division by zero...
@@ -679,8 +670,6 @@ Examples:
 >>> input = torch.randn(20, 100, 35, 45)
 >>> output = m(input)
 """
-
-@mark_materialize("torch")
 class BatchNorm2d(ElementWiseUnaryOp):
     in_dtypes = [(DType.float32,)]
     out_dtypes = [(DType.float32,)]
@@ -702,7 +691,7 @@ class BatchNorm2d(ElementWiseUnaryOp):
             nnsmith_ge(input_shapes[0].shape[0], 2),
         ]
 
-# !Translate the spec marked by `mark_materialize` into a callable in PyTorch
+# !Translate the spec into a callable in PyTorch
 def forward_fn(op: BatchNorm2d) -> Callable:
     return torch.nn.BatchNorm2d(num_features=op.nfeat)
 ```
@@ -741,12 +730,12 @@ Now, your task is to follow the format of examples (in "# Example") shown above:
 (2). Implement a `forward_fn` function that transforms the specification class into a real PyTorch callable.
 
 NOTES:
-1. **DO NOT** use on any PyTorch APIs in `type_transfer` and `requires`. Instead, reason about the constraints and output shapes symbolically using the `nnsmith_*` APIs
-2.1 The `__init__` function for spec marked by `mark_materialize` can only take arguments whose type is `Union[z3.IntNumRef, int]` which are the integer attributes that can impact  `type_transfer` or `requires`
-2.2 If an attribute is not a symbolizable integer (boolean is not integer) or it is not used by `type_transfer` or `requires`, don't model it in `__init__`
-3. For non-symbolizable attributes that are required in `forward_fn` for constructing the PyTorch callable, one can use some default values or literals to hardcode it
-4. `forward_fn` should take an instance of the specification class as input and return a callable that takes the same number of arguments (>= 1) as the number of inputs of the operator (in `type_transfer`)
-5. You may assume the importing statements to be as follows, but don't repeat/include such statements in your response code:
++ **DO NOT** use PyTorch APIs in `type_transfer` and `requires`
++ The `__init__` method of specification classes **MUST ONLY** take `Union[z3.IntNumRef, int]` arguments as integer attributes impacting `type_transfer` or `requires`
++ If an attribute is not a symbolizable integer (boolean is not integer) or it is not used by `type_transfer` or `requires`, don't model it in `__init__`
++ For non-symbolizable attributes required in `forward_fn` to construct the PyTorch callable, one can use some hardcoded literals
++ `forward_fn` takes a specification instance as input and returns a callable that takes the same number of arguments (>= 1) as the number of inputs of the operator (in `type_transfer`)
++ You may assume the importing statements to be as follows, but don't repeat/include such statements in your response code:
 
 ```python
 import random
