@@ -1,24 +1,18 @@
 import yaml
 import os
 
-BASIC_INTRO = R'''Overall, we want you to extract properties that describe (i) how the data types and shapes of input tensors are transformed (`type_transfer`); and (ii) what constraints
-must be satisfied between the input tensors and the operator attributes in order to make the computation valid (`requires`).
-The property is specified in a class that inherits from `AbsOpBase` below:
+BASIC_INTRO = R'''We want you to extract properties that describe (i) how the data types and shapes of input tensors are transformed (`type_transfer`);
+and (ii) what constraints must be satisfied between the input tensors and the operator attributes in order to make the computation valid (`requires`);
+by extending the `AbsOpBase` class below:
 
 ```python
 class AbsOpBase(ABC):
-    # number of symbolic attributes (e.g., kernel size, stride, etc.) that can impact the constraints
-    num_var_param = None
-    # All inputs must have the same dimension (e.g., Concat)?
+    num_var_param = None  # Number of symbolic attributes
     same_inp_dims = False
-    # input dtypes: enumerates all possible input dtype combinations. Size of the list is the number of combinations.
-    # Each element is a tuple of allowed input dtypes. NOTE: len(list) can >= the # of inputs, for handling ops with arbitrary arity.
-    # For example, [(DType.float32, DType.float32), (DType.float64, DType.float64), (DType.int32, DType.int32)] means that
-    # this op can accept one of float32xfloat32, float64xfloat64, and int32xint32 as input dtypes.
-    in_dtypes: List[Tuple[DType, ...]]  = None  # Overwrite me!
-    out_dtypes: List[Tuple[DType, ...]] = None  # Overwrite me!
 
-    limit_domain = False # Does this operator have limited domain that can easily produce NaN/Inf (e.g., Log)
+    # Enumeration of dtype combinations
+    in_dtypes: List[Tuple[DType, ...]]  = None
+    out_dtypes: List[Tuple[DType, ...]] = None
 
     def __init__(self):
         """To be overloaded for symbolizable (`Union[z3.IntNumRef, int]`) attributes (if any) which impacts the constraints"""
@@ -27,21 +21,18 @@ class AbsOpBase(ABC):
         # The format is like [ Tuple[int, ...], Tuple[int, ...], ... ]
         # where the i-th tuple is the plausible ranks of the i-th input
         # e.g., for avgpool2d, inp_ranks = [(4,)] means that the inputs must be a single 4-dim tensor.
-        # Utility functions like `rank_from(start)`, `rank_range(start, end)`, `rank_until(end)`, `rank_all()`
-        # can help simplify the specification.
-        # e.g., for Add, inp_ranks = [rank_all(), rank_all()] means that the inputs can be any rank.
 
-    @abstractmethod  # Overload me
+    # Overload me
     def type_transfer(self, input_shapes: List[AbsTensor]) -> List[AbsTensor]:
         """Computes the output shapes and data types using `input_shapes` and attributes. Exception means rejection."""
-        raise NotImplementedError
+        ...
 
     # Overload if additional constraints are required
     def requires(self, input_shapes: List[AbsTensor]) -> List[Union[z3.ExprRef, bool]]:
-        """Return constraints (booleans or Z3 predicates) between the input tensors and attributes"""
+        """Return constraints between the input tensors and attributes"""
         return []
 
-    @abstractmethod  # Overload me
+    # Overload me
     def deduct_inp_ranks_and_dtype(
         self, out_abs_tensor: List[AbsTensor]
     ) -> List[Tuple[int, DType]]:
@@ -54,22 +45,10 @@ Meanwhile, this is the additional context for some of the class & method used ab
 class DType(Enum):
     float16
     float32
-    float64
-    uint8
-    uint16
-    uint32
-    uint64
-    int8
-    int16
-    int32
-    int64
-    bool
-    complex64
-    complex128
+    ...
 
 # Reusable macros
-DTYPE_INCOMMON = [DType.uint16, DType.uint32, DType.uint64]
-DTYPE_GEN_ALL = [e for e in DType if e not in DTYPE_INCOMMON]
+DTYPE_GEN_ALL = ...
 DTYPE_GEN_NON_BOOL = [dtype for dtype in DTYPE_GEN_ALL if dtype != DType.bool]
 DTYPE_GEN_FLOATS = [DType.float16, DType.float32, DType.float64]
 DTYPE_GEN_INTS = [
@@ -95,22 +74,6 @@ class UnaryOpBase(AbsOpBase):
         super().__init__()
         self.out_ranks = [rank_all()]
 
-class BinaryOpBase(AbsOpBase):
-    in_dtypes = [(i, i) for i in DTYPE_GEN_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
-
-    def __init__(self):
-        super().__init__()
-        self.out_ranks = [rank_all()]
-
-class TernaryOpBase(AbsOpBase):
-    in_dtypes = [(i, i, i) for i in DTYPE_GEN_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
-
-    def __init__(self):
-        super().__init__()
-        self.out_ranks = [rank_all()]
-
 class ElementWiseUnaryOp(UnaryOpBase):
     def __init__(self):
         super().__init__()
@@ -128,54 +91,7 @@ class ElementWiseUnaryOp(UnaryOpBase):
             (out_abs_tensor[0].ndims, out_abs_tensor[0].dtype),
         ]
 
-class BcastBinaryOp(BinaryOpBase):
-    # by default, output dtype is the same as the first input dtype
-    _bcast_out_dtypes = None
-
-    def __init__(self):
-        super().__init__()
-        self.inp_ranks = [rank_all(), rank_all()]
-
-    def type_transfer(self, input_shapes: List[AbsTensor]) -> List[AbsTensor]:
-        tgt_shape = broadcast_shapes(*(ish.shape for ish in input_shapes))
-        dtype = (
-            input_shapes[0].dtype
-            if self._bcast_out_dtypes is None
-            else self._bcast_out_dtypes[0]
-        )
-        return [AbsTensor(tgt_shape, dtype)]
-
-    def requires(self, input_shapes):
-        return broadcast_cons_binary(*(ish.shape for ish in input_shapes))
-
-    def deduct_inp_ranks_and_dtype(
-        self, out_abs_tensor: List[AbsTensor]
-    ) -> List[Tuple[int, DType]]:
-        x, y = bcast_rand_ndims(2, out_abs_tensor[0].ndims)
-        return [
-            (x, out_abs_tensor[0].dtype),
-            (y, out_abs_tensor[0].dtype),
-        ]
-
-class BcastBinaryOp1(BcastBinaryOp):  # +-*/ max min
-    in_dtypes = [(i, i) for i in DTYPE_GEN_NON_BOOL]
-    out_dtypes = [(i,) for i in DTYPE_GEN_NON_BOOL]
-    _bcast_out_dtypes = None
-
-class Comparator(BcastBinaryOp):  # > < =
-    in_dtypes = [(i, i) for i in DTYPE_GEN_ALL]
-    out_dtypes = [(DType.bool,)]
-    _bcast_out_dtypes = [DType.bool]
-
-    def deduct_inp_ranks_and_dtype(
-        self, out_abs_tensor: List[AbsTensor]
-    ) -> List[Tuple[int, DType]]:
-        x, y = bcast_rand_ndims(2, out_abs_tensor[0].ndims)
-        in_dtypes = random.choice(self.in_dtypes)
-        return [
-            (x, in_dtypes[0]),
-            (y, in_dtypes[1]),
-        ]
+# BinaryOpBase, TernaryOpBase, etc. are similar
 ```
 '''
 
@@ -253,7 +169,6 @@ class Linear(UnaryOpBase):
     ) -> List[Tuple[int, DType]]:
         return [(out_abs_tensor[0].ndims, DType.float32)]
 
-# !Translate the spec into a callable in PyTorch
 def forward_fn(op: Linear) -> Callable:
     return torch.nn.Linear(in_features=op.ifeat, out_features=op.ofeat)
 ```
@@ -319,7 +234,6 @@ class Flatten(UnaryOpBase):
         # The rank of output tensor is 1 anyways such that the input ranks can be any of the input ranks.
         return [(random.randint(self.inp_ranks[0], self.inp_ranks[-1]), out_abs_tensor[0].dtype)]
 
-# !Translate the spec into a callable in PyTorch
 def forward_fn(op: Flatten) -> Callable:
     return torch.Tensor.flatten
 ```
@@ -487,7 +401,6 @@ class MatMul(BinaryOpBase):
             (ranks[2] + ranks[3], out_abs_tensor[0].dtype),
         ]
 
-# !Translate the spec into a callable in PyTorch
 def forward_fn(op: MatMul) -> Callable:
     return torch.matmul
 ```
@@ -503,34 +416,15 @@ Padding size:The padding size by which to pad some dimensions of input
 are described starting from the last dimension and moving forward.
 ⌊len(pad)2⌋\left\lfloor\frac{\text{len(pad)}}{2}\right\rfloor⌊2len(pad)​⌋ dimensions
 of input will be padded.
-For example, to pad only the last dimension of the input tensor, then
-pad has the form
-(padding_left,padding_right)(\text{padding\_left}, \text{padding\_right})(padding_left,padding_right);
-to pad the last 2 dimensions of the input tensor, then use
-(padding_left,padding_right,(\text{padding\_left}, \text{padding\_right},(padding_left,padding_right,
-padding_top,padding_bottom)\text{padding\_top}, \text{padding\_bottom})padding_top,padding_bottom);
-to pad the last 3 dimensions, use
-(padding_left,padding_right,(\text{padding\_left}, \text{padding\_right},(padding_left,padding_right,
-padding_top,padding_bottom\text{padding\_top}, \text{padding\_bottom}padding_top,padding_bottom
-padding_front,padding_back)\text{padding\_front}, \text{padding\_back})padding_front,padding_back).
-
-Padding mode:See torch.nn.CircularPad2d, torch.nn.ConstantPad2d,
-torch.nn.ReflectionPad2d, and torch.nn.ReplicationPad2d
-for concrete examples on how each of the padding modes works. Constant
-padding is implemented for arbitrary dimensions. Circular, replicate and
-reflection padding are implemented for padding the last 3 dimensions of a
-4D or 5D input tensor, the last 2 dimensions of a 3D or 4D input tensor,
-or the last dimension of a 2D or 3D input tensor.
 
 Parameters
 
 input (Tensor) – N-dimensional tensor
 pad (tuple) – m-elements tuple, where
 m2≤\frac{m}{2} \leq2m​≤ input dimensions and mmm is even.
-mode – 'constant', 'reflect', 'replicate' or 'circular'.
+mode – 'constant', 'reflect' or 'replicate'
 Default: 'constant'
 value – fill value for 'constant' padding. Default: 0
-
 
 
 Examples:
@@ -550,13 +444,12 @@ torch.Size([3, 3, 8, 4])
 torch.Size([3, 9, 7, 3])
 """
 class Pad(UnaryOpBase, ABC):
-    num_var_param = _pad_num_var_param()
     in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
     out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
-    def __init__(self, padding_list, pad_t):
+    def __init__(self, p0, p1, p2, p3, p4, p5, pad_t):
         super().__init__()
-        self.padding_list = padding_list
+        self.padding_list = [p0, p1, p2, p3, p4, p5]
         self.inp_ranks = [rank_from(len(padding_list) // 2)]
         self.out_ranks = [rank_from(len(padding_list) // 2)]
         assert (
@@ -596,21 +489,19 @@ class Pad(UnaryOpBase, ABC):
         return [(out_abs_tensor[0].ndims, out_abs_tensor[0].dtype)]
 
 class ConstPad(Pad):
-    def __init__(self, *padding_list):
-        super().__init__(padding_list, "constant")
+    def __init__(self, p0, p1, p2, p3, p4, p5):
+        super().__init__([p0, p1, p2, p3, p4, p5], "constant")
 
 class ReplicatePad(Pad):
-    num_var_param = _pad_num_var_param(2, max=6)
-
-    def __init__(self, *padding_list):
+    def __init__(self, p0, p1, p2, p3, p4, p5):
+        padding_list = [p0, p1, p2, p3, p4, p5]
         super().__init__(padding_list, "replicate")
         self.inp_ranks = [rank_range(len(padding_list) // 2 + 1, 4)]
         self.out_ranks = [rank_range(len(padding_list) // 2 + 1, 4)]
 
 class ReflectPad(Pad):
-    num_var_param = _pad_num_var_param(2, max=6)
-
-    def __init__(self, *padding_list):
+    def __init__(self, p0, p1, p2, p3, p4, p5):
+        padding_list = [p0, p1, p2, p3, p4, p5]
         super().__init__(padding_list, "reflect")
         self.inp_ranks = [rank_range(len(padding_list) // 2 + 1, 4)]
         self.out_ranks = [rank_range(len(padding_list) // 2 + 1, 4)]
@@ -621,14 +512,11 @@ class ReflectPad(Pad):
         isv = input_shapes[0].shape
         for i in range(len(pad) // 2):
             j = len(isv) - 1 - i
-            # per torch's complaint: Padding size should be less than the corresponding input dimension
             cons.append(nnsmith_lt(pad[i * 2], isv[j]))
             cons.append(nnsmith_lt(pad[i * 2 + 1], isv[j]))
-            # same sign to avoid ORT bugs
             cons.append(nnsmith_ge(pad[i * 2] * pad[i * 2 + 1], 0))
         return cons
 
-# !Translate the spec into a callable in PyTorch
 def forward_fn(op: Pad):
     if op.extra_attrs["type"] == "constant":
         # 0 easily cause division by zero...
@@ -649,9 +537,6 @@ EXAMPLE_BATCHNORM = R'''# Example
 class torch.nn.BatchNorm2d(num_features, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, device=None, dtype=None)[source]¶
 Applies Batch Normalization over a 4D input (a mini-batch of 2D inputs with additional channel dimension).
 
-Because the Batch Normalization is done over the C dimension, computing statistics
-on (N, H, W) slices, it’s common terminology to call this Spatial Batch Normalization.
-
 Parameters
 
 num_features (int) – CCC from an expected input of size
@@ -663,10 +548,7 @@ Input: (N,C,H,W)(N, C, H, W)(N,C,H,W)
 Output: (N,C,H,W)(N, C, H, W)(N,C,H,W) (same shape as input)
 
 Examples:
->>> # With Learnable Parameters
 >>> m = nn.BatchNorm2d(100)
->>> # Without Learnable Parameters
->>> m = nn.BatchNorm2d(100, affine=False)
 >>> input = torch.randn(20, 100, 35, 45)
 >>> output = m(input)
 """
@@ -691,7 +573,6 @@ class BatchNorm2d(ElementWiseUnaryOp):
             nnsmith_ge(input_shapes[0].shape[0], 2),
         ]
 
-# !Translate the spec into a callable in PyTorch
 def forward_fn(op: BatchNorm2d) -> Callable:
     return torch.nn.BatchNorm2d(num_features=op.nfeat)
 ```
@@ -705,15 +586,13 @@ def make_prompt(doc):
         + EXAMPLE_FLATTEN
         + EXAMPLE_BATCHNORM
         + f'''
-Now, given the documentation:
+Now, given the doc:
 
-```
 """
 {doc}
 """
-```
 
-Follow the format of examples (in "# Example") shown above to implement a specification class as well as a "forward_fn" function that transforms it into a real PyTorch callable:
+Follow the format of "# Example" to implement a specification class and a "forward_fn" function:
 '''
     )
 
@@ -726,28 +605,15 @@ def make_prompt_v2(doc):
         + EXAMPLE_PAD
         + f'''
 Now, your task is to follow the format of examples (in "# Example") shown above:
-(1). Implement a specification class by overloading `AbsOpBase` or one of its subclasses (e.g., `UnaryOpBase`).
-(2). Implement a `forward_fn` function that transforms the specification class into a real PyTorch callable.
+(1). Implement a specification class by extending `AbsOpBase` or its subclasses (e.g., `UnaryOpBase`)
+(2). Implement a `forward_fn` function that transforms the specification class into a real PyTorch callable
 
 NOTES:
 + **DO NOT** use PyTorch APIs in `type_transfer` and `requires`
-+ The `__init__` method of specification classes **MUST ONLY** take `Union[z3.IntNumRef, int]` arguments as integer attributes impacting `type_transfer` or `requires`
-+ If an attribute is not a symbolizable integer (boolean is not integer) or it is not used by `type_transfer` or `requires`, don't model it in `__init__`
-+ For non-symbolizable attributes required in `forward_fn` to construct the PyTorch callable, one can use some hardcoded literals
-+ `forward_fn` takes a specification instance as input and returns a callable that takes the same number of arguments (>= 1) as the number of inputs of the operator (in `type_transfer`)
-+ You may assume the importing statements to be as follows, but don't repeat/include such statements in your response code:
-
-```python
-import random
-from typing import List, Tuple, Union, Callable
-
-import z3
-
-from nnsmith.abstract.op import *
-from nnsmith.abstract.arith import *
-from nnsmith.abstract.dtype import *
-from nnsmith.abstract.tensor import AbsTensor
-```
++ The attributes in `__init__` are single symbolic integers (`Union[z3.IntNumRef, int]`) and impact `type_transfer` or `requires`. Do not use compound types (sperate integers instead)
++ DO NOT in `__init__` introduce NON-integer attributes such `threshold` and `delta` which do not impact `type_transfer` or `requires`, instead use hardcoded literals in `forward_fn`
++ All required elements have been imported (`nnsmith_*` and `AbsTensor`...) so don't repeat/include import statements
++ Scalar can still be tensors with rank equal to 0 (e.g., `AbsTensor(shape=[], dtype=...)`)
 
 Your turn! Given the documentation:
 
@@ -765,6 +631,8 @@ if __name__ == "__main__":
         "deepseek-ai/deepseek-coder-33b-instruct", trust_remote_code=True
     )
 
+    n_tokens = []
+
     prefix = os.path.join(os.path.dirname(__file__), "prompts")
     for yaml_file in sorted(os.listdir(prefix)):
         full_path = os.path.join(prefix, yaml_file)
@@ -772,5 +640,10 @@ if __name__ == "__main__":
             doc = yaml.load(f, Loader=yaml.FullLoader)
         prompt = make_prompt_v2(doc["doc"])
         doc["prompt"] = prompt
+
+        n_tokens.append(len(tokenizer.encode(prompt)))
+
         with open(full_path, "w") as f:
             yaml.dump(doc, f)
+
+    print(f"Average number of tokens: {sum(n_tokens) / len(n_tokens) :.1f}")
