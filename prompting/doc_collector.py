@@ -16,6 +16,9 @@ DOC_ROOTS = [
 BLOCK_LIST = [
     "torch.nn.functional.interpolate",
     "torch.nn.functional.pad",
+    "torch.nn.functional.relu",
+    "torch.nn.functional.linear",
+    "torch.nn.functional.leaky_relu",
     "torch.atan",
     "torch.abs",
     "torch.acos",
