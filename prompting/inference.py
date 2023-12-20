@@ -33,8 +33,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", help="Path to validate")
-    parser.add_argument("--replicas", help="Number of replicas", type=int, default=3)
+    parser.add_argument("--replicas", help="Number of replicas", type=int, default=1)
     args = parser.parse_args()
+
+    os.makedirs(args.output_dir, exist_ok=True)
 
     prompts = []
     apis = []
@@ -45,11 +47,11 @@ if __name__ == "__main__":
         prompts.append(prompt["prompt"])
 
     prompts = [
-        f"""You are an expert in PyTorch programming proficient in extracting and symbolizing properties of some PyTorch functions.
-    ### Instruction:
-    {prompt}
-    ### Response:
-    """
+        f"""You are a PyTorch expert proficient in symbolizing shaping properties of PyTorch functions.
+### Instruction:
+{prompt}
+### Response:
+"""
         for prompt in prompts
     ]
 
@@ -75,6 +77,11 @@ if __name__ == "__main__":
             for api, prompt in p.track(
                 list(zip(apis, prompts)), description="Processing..."
             ):
+                target_path = os.path.join(args.output_dir, f"{api}.txt")
+                # skip if exist
+                if os.path.exists(target_path):
+                    continue
+
                 outputs = []
                 input_tokens = tokenizer.encode(prompt, return_tensors="pt").to("cuda")
                 print(f"Input tokens: {input_tokens.shape}")
@@ -83,10 +90,9 @@ if __name__ == "__main__":
                         input_tokens,
                         do_sample=True,
                         top_p=0.95,
-                        top_k=50,
                         temperature=0.2,
                         num_return_sequences=1,
-                        max_new_tokens=768,
+                        max_new_tokens=1024,
                         eos_token_id=32021,
                     )
                     outputs.append(
@@ -95,7 +101,7 @@ if __name__ == "__main__":
                         )
                     )
 
-                with open(os.path.join(args.output_dir, f"{api}.txt"), "w") as f:
+                with open(target_path, "w") as f:
                     for sample in outputs:
                         f.write(sample)
                         f.write("\n")

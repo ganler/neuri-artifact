@@ -612,7 +612,8 @@ NOTES:
 + **DO NOT** use PyTorch APIs in `type_transfer` and `requires`
 + The attributes in `__init__` are single symbolic integers (`Union[z3.IntNumRef, int]`) and impact `type_transfer` or `requires`. Do not use compound types (sperate integers instead)
 + DO NOT in `__init__` introduce NON-integer attributes such `threshold` and `delta` which do not impact `type_transfer` or `requires`, instead use hardcoded literals in `forward_fn`
-+ All required elements have been imported (`nnsmith_*` and `AbsTensor`...) so don't repeat/include import statements
++ `nnsmith_*` is used to check the relation constraints over the symbolic integers, DO NOT use it to check over non-integers such as strings and dtype
++ All required elements have been imported (`nnsmith_*` and `AbsTensor`...) so don't repeat/include import statements like strings and dtypes
 + Scalar can still be tensors with rank equal to 0 (e.g., `AbsTensor(shape=[], dtype=...)`)
 
 Your turn! Given the documentation:
