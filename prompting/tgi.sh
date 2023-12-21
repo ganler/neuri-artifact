@@ -29,5 +29,7 @@ fi
 model=TheBloke/deepseek-coder-33B-instruct-AWQ
 volume=$TGI_HOME/data # share a volume with the Docker container to avoid downloading weights every run
 
+# https://huggingface.co/docs/text-generation-inference/basic_tutorials/launcher
 docker run --gpus "device=${GPUS}" --shm-size 1g -p 8080:80 -v $volume:/data ghcr.io/huggingface/text-generation-inference:1.3 --model-id $model --quantize awq \
-                          --max-total-tokens $MAX_TOKENS
+                          --max-total-tokens $MAX_TOKENS \
+                          --max-input-length $(echo "$MAX_TOKENS/2" | bc)
