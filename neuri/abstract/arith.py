@@ -193,6 +193,11 @@ def nnsmith_max(left, right):
     return z3.If(nnsmith_ge(left, right), left, right)
 
 
+def nnsmith_pow(left, right):
+    left, right = align_bvs(left, right)
+    return left**right
+
+
 def nnsmith_and(left, right):
     if isinstance(left, bool) and isinstance(right, bool):
         return left and right

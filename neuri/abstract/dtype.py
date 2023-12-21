@@ -210,3 +210,4 @@ DTYPE_GEN_INTS = [
     DType.int64,
     DType.uint8,
 ]
+DTYPE_GEN_COMPLEX = [DType.complex64, DType.complex128]

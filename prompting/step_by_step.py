@@ -107,11 +107,10 @@ class MatMul(AbsOpBase):
     '''
     in_dtypes = [
         (i, i)
-        for i in DTYPE_GEN_NON_BOOL
-        if i not in [DType.complex64, DType.complex128]
+        for i in DTYPE_GEN_NON_BOOL if i not in DTYPE_GEN_COMPLEX
     ]
     out_dtypes = [
-        (i,) for i in DTYPE_GEN_NON_BOOL if i not in [DType.complex64, DType.complex128]
+        (i,) for i in DTYPE_GEN_NON_BOOL if i not in DTYPE_GEN_COMPLEX
     ]
     def __init__(self):
         super().__init__()
@@ -190,7 +189,6 @@ class ReLU(AbsOpBase):
         # input/output ranks
         self.inp_ranks = [rank_all()]
         self.out_ranks = [rank_all()]
-
 # END
 
 # {api}
@@ -656,7 +654,7 @@ def forward_fn(op:""",
                 prompter=lambda code: f"""\
 ## Instruction
 
-Please rewrite the python code using `nnsmith` operators for symbolic computation in `requires` and `type_transfer`:
+Please rewrite the python code following  `nnsmith` operators for symbolic computation in `requires` and `type_transfer`:
 - z3expr and z3expr => nnsmith_and(z3expr, z3expr)
 - z3expr or z3expr => nnsmith_or(z3expr, z3expr)
 - not z3expr => nnsmith_not(z3expr)
@@ -675,8 +673,7 @@ Please rewrite the python code using `nnsmith` operators for symbolic computatio
 ```python
 # {api}
 """,
-                composer=lambda prmpt, cmpln, old: f"# {api}\n"
-                + cmpln.rstrip("\n```")
+                composer=lambda prmpt, cmpln, old: cmpln.rstrip("\n```")
                 + "\n    def deduct_inp_ranks_and_dtype("
                 + old.split("    def deduct_inp_ranks_and_dtype(")[-1],
                 eos=["\n```"],
@@ -692,6 +689,8 @@ Please rewrite the python code using `nnsmith` operators for symbolic computatio
             full_path = os.path.join(prefix, yaml_file)
             with open(full_path, "r") as f:
                 doc = yaml.load(f, Loader=yaml.FullLoader)
+            if doc["api"] != "torch.signal.windows.nuttall":
+                continue
 
             code = generate_spec(doc["api"], doc["doc"])
             target_path = os.path.join(args.output_dir, f"{doc['api']}.txt")
