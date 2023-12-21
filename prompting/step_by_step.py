@@ -1,6 +1,6 @@
 """
 ## Step-by-step Prompting for Long Specifications Generation
-0. Let output spec code S = "class " 
+0. Let output spec code S = "class "
 1. Decompose the specification generation task into multiple steps.
 2. In each step, use a step-specific prompt comprised of {few-shot examples, constraints, and instructions}.
 3. Parse the prompt+output to S, continue to a new step of 2.
@@ -27,10 +27,12 @@ def step_by_step_gen(client: Client, steps: List[Step]):
     for step in steps:
         prompt = step.prompter(code)
         completion = client.textgen(prompt=prompt, stop_sequences=step.eos)
-        # print(prompt)
-        # print("---------")
-        # print(completion)
+        print(prompt)
+        print("---------")
+        print(completion)
         new_code = step.composer(prompt, completion, code)
+        print("=========")
+        print(new_code)
         if step.validator:  # TODO(@ganler): consider retry mechanism
             step.validator(code)
         code = new_code
@@ -73,31 +75,36 @@ if __name__ == "__main__":
 
     def generate_spec(api, doc, debug=False) -> str:
         steps = []
-
-        # step 1: determine class names and input/output dtypes
+        # step 1: figure out the attributes and ranks
         # - few-shot prompting
+        # - chain of thoughts
         steps.append(
             Step(
-                prompter=lambda _: f"""\
-# Reusable macros
-DTYPE_GEN_ALL = ...
-DTYPE_GEN_NON_BOOL = [dtype for dtype in DTYPE_GEN_ALL if dtype != DType.bool]
-DTYPE_GEN_FLOATS = [DType.float16, DType.float32, DType.float64]
-DTYPE_GEN_INTS = [
-    DType.int8,
-    DType.int16,
-    DType.int32,
-    DType.int64,
-    DType.uint8,
-]
-
-# torch.flatten
-class Flatten(UnaryOpBase):
-    in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
-    out_dtypes = [(i,) for i in DTYPE_GEN_ALL]
-
+                prompter=lambda code: f"""\
 # torch.matmul
-class MatMul(BinaryOpBase):
+class MatMul(AbsOpBase):
+    '''
+    Signature: torch.matmul(input, other, *, out=None)
+    Example:
+    ```
+    >>> torch.matmul(tensor1, tensor2).size()
+    torch.Size([3])
+    ```
+    Argument:
+    - `input`:
+        - is a tensor: YES
+        So not in __init__
+    - `other`:
+        - is a tensor: YES
+        So not in __init__
+    - other arguments are not interesting
+    Input/Output Rank (scalar is 0-rank):
+    - #inputs: 2
+        - rank of #0: 1-3
+        - rank of #1: 1-3
+    - #outputs: 1
+        - rank of #0: min-3
+    '''
     in_dtypes = [
         (i, i)
         for i in DTYPE_GEN_NON_BOOL
@@ -106,55 +113,6 @@ class MatMul(BinaryOpBase):
     out_dtypes = [
         (i,) for i in DTYPE_GEN_NON_BOOL if i not in [DType.complex64, DType.complex128]
     ]
-
-# torch.fft.fftfreq
-class Pad(UnaryOpBase):
-    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
-    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
-
-# torch.nn.BatchNorm2d
-class BatchNorm2d(ElementWiseUnaryOp):
-    in_dtypes = [(DType.float32,)]
-    out_dtypes = [(DType.float32,)]
-
-# {api}
-class""",
-                composer=lambda prmpt, cmpln, old: "class" + cmpln,
-                eos=["\n\n", "\n#", "\ndef", "\nclass"],
-                validator=None,
-            )
-        )
-
-        # step 2: figure out the attributes and ranks
-        # - few-shot prompting
-        # - chain of thoughts
-        steps.append(
-            Step(
-                prompter=lambda code: f"""\
-# torch.matmul
-class MatMul(BinaryOpBase):
-    '''
-    Signature: torch.matmul(input, other, *, out=None)
-    Example:
-    ```
-    >>> torch.matmul(tensor1, tensor2).size()
-    torch.Size([3])
-    ```
-    Argument analysis:
-    - `input`:
-        - is a tensor: YES
-        So not in __init__
-    - `other`:
-        - is a tensor: YES
-        So not in __init__
-    - other arguments are not quite interesting
-    Input/Output Rank analysis (scalar is 0-rank):
-    - has 2 inputs:
-        - rank of #1: 1-3
-        - rank of #2: 1-3
-    - has 1 output:
-        - rank of #1: min-3
-    '''
     def __init__(self):
         super().__init__()
         # attributes
@@ -165,16 +123,16 @@ class MatMul(BinaryOpBase):
 # END
 
 # nn.BatchNorm2d
-class BatchNorm2d(ElementWiseUnaryOp):
+class BatchNorm2d(AbsOpBase):
     '''
-    Signature: torch.nn.BatchNorm2d(num_features, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, device=None, dtype=None)
+    Signature: torch.nn.BatchNorm2d(num_features, eps=1e-05, momentum=0.1, affine=True, device=None, dtype=None)
     ```
     >>> m = nn.BatchNorm2d(100)
     >>> input = torch.randn(20, 100, 35, 45)
     >>> m(input).size()
     torch.Size([20, 100, 35, 45])
     ```
-    Argument analysis:
+    Argument:
     - `num_features`:
         - is a tensor: NO
         - is a symbolizable integer: YES
@@ -185,13 +143,15 @@ class BatchNorm2d(ElementWiseUnaryOp):
         - is a symbolizable integer: NO
         So not in __init__
     - `momentum` is similar to `eps`
-    - other arguments are not quite interesting
-    Input/Output Rank analysis (scalar is 0-rank):
-    - has 1 input:
-        - rank of #1: 4
-    - has 1 output:
-        - rank of #1: 4
+    - other arguments are not interesting
+    Input/Output Rank (scalar is 0-rank):
+    - #inputs (align w/ in_dtypes): 1
+        - rank of #0: 4
+    - #outputs (align w/ out_dtypes): 1
+        - rank of #0: 4
     '''
+    in_dtypes = [(DType.float32,)]
+    out_dtypes = [(DType.float32,)]
     def __init__(self, nfeat):
         super().__init__()
         # attributes
@@ -202,7 +162,7 @@ class BatchNorm2d(ElementWiseUnaryOp):
 # END
 
 # torch.nn.functional.relu
-class ReLU(UnaryOpBase):
+class ReLU(AbsOpBase):
     '''
     Signature: torch.nn.functional.relu(input, inplace=False)
     ```
@@ -210,20 +170,19 @@ class ReLU(UnaryOpBase):
     >>> torch.nn.functional.relu(input).size()
     torch.Size([2])
     ```
-    Argument analysis:
+    Argument:
     - `input`:
         - is a tensor: YES
         So not in __init__
-    - `inplace`:
-        - is a tensor: NO
-        - is a symbolizable integer: NO
-        So not in __init__
-    Input/Output Rank analysis (scalar is 0-rank):
-    - has 1 input:
-        - rank of #1: all
-    - has 1 output:
-        - rank of #1: all
+    - other arguments are not interesting
+    Input/Output Rank (scalar is 0-rank):
+    - #inputs (align w/ in_dtypes): 1
+        - rank of #0: all
+    - #outputs (align w/ out_dtypes): 1
+        - rank of #0: all
     '''
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
     def __init__(self):
         super().__init__()
         # attributes
@@ -235,12 +194,14 @@ class ReLU(UnaryOpBase):
 # END
 
 # {api}
-{code.splitlines()[0]}
-    '''
-    Signature: {api}(""",
+""",
                 composer=lambda prmpt, cmpln, old: "\n".join(
                     l
-                    for l in (old + cmpln.split("'''\n", 1)[-1]).splitlines()
+                    for l in (
+                        cmpln.split("\n    '''\n")[0]
+                        + "\n"
+                        + cmpln.split("\n    '''\n")[-1]
+                    ).splitlines()
                     if l.strip() and not l.strip().startswith("#")
                 ),
                 eos=["\n# END"],
@@ -248,13 +209,13 @@ class ReLU(UnaryOpBase):
             )
         )
 
-        # step 3: input constraints
+        # step 2: input constraints
         # - few-shot prompting
         steps.append(
             Step(
                 prompter=lambda code: f"""\
 # torch.flatten
-class Flatten(UnaryOpBase):
+class Flatten(AbsOpBase):
     def __init__(self):
         super().__init__()
         # attributes
@@ -264,11 +225,11 @@ class Flatten(UnaryOpBase):
         self.out_ranks = [(1,)]
 
     def requires(self, itensors: List[AbsTensor]) -> List[Union[z3.BoolRef, bool]]:
-        return [] # No symbolic constraints, any inputs are fine
+        return [] # No constraints
 # END
 
 # nn.BatchNorm2d
-class BatchNorm2d(ElementWiseUnaryOp):
+class BatchNorm2d(AbsOpBase):
     def __init__(self, nfeat):
         super().__init__()
         # attributes
@@ -278,14 +239,14 @@ class BatchNorm2d(ElementWiseUnaryOp):
         self.out_ranks = [(4,)]
 
     def requires(self, itensors: List[AbsTensor]) -> List[Union[z3.BoolRef, bool]]:
-        return [
-            nnsmith_eq(self.nfeat, itensors[0].shape[1]),
-            nnsmith_ge(itensors[0].shape[0], 2),
-        ]
+        ret = []
+        ret.append(nnsmith_eq(self.nfeat, itensors[0].shape[1]))
+        ret.append(itensors[0].shape[0] > 1)
+        return ret
 # END
 
 # torch.matmul
-class MatMul(BinaryOpBase):
+class MatMul(AbsOpBase):
     def __init__(self):
         super().__init__()
         # attributes
@@ -295,19 +256,78 @@ class MatMul(BinaryOpBase):
         self.out_ranks = [rank_until(3)]
 
     def requires(self, itensors: List[AbsTensor]) -> List[Union[z3.BoolRef, bool]]:
-        cons = []
-        lhs = input_shapes[0].shape
-        rhs = input_shapes[1].shape
+        ret = []
+        lhs = itensors[0].shape
+        rhs = itensors[1].shape
         lrc = lhs[-2:]
         rrc = rhs[-2:]
-        cons.append(lrc[-1] == rrc[0]) 
-        # CHECK: batch dim broadcastable
+        ret.append(lrc[-1] == rrc[0])
+        # batch dims must match with each other
         lbatch = lhs[: -len(lrc)]
         rbatch = rhs[: -len(rrc)]
         common_tail = min(len(lbatch), len(rbatch))
         for x, y in zip(lbatch[-common_tail:], rbatch[-common_tail:]):
-            cons.append(nnsmith_or(x == y, nnsmith_or(x == 1, y == 1)))
-        return cons
+            ret.append(nnsmith_or(x == y, nnsmith_or(x == 1, y == 1)))
+        return ret
+# END
+
+# torch.nn.Softmax
+class Softmax(AbsOpBase):
+    def __init__(self, dim):
+        super().__init__()
+        # attributes
+        self.dim = dim
+        # input/output ranks
+        self.inp_ranks = [rank_from(1)]
+        self.out_ranks = [rank_from(1)]
+
+    def requires(self, itensors: List[AbsTensor]) -> List[Union[z3.BoolRef, bool]]:
+        ret = []
+        ret.append(nnsmith_ge(self.dim, 0))
+        ret.append(nnsmith_lt(self.dim, itensors[0].ndims))
+        return ret
+# END
+
+class Pool2d(UnaryOpBase):
+    def __init__(
+        self,
+        kernel_h_size,
+        kernel_w_size,
+        stride,
+        padding,
+    ):
+        super().__init__()
+        # attributes
+        self.kernel_h_size = kernel_h_size
+        self.kernel_w_size = kernel_w_size
+        self.stride = stride
+        self.padding = padding
+        # input/output ranks
+        self.inp_ranks = [(4,)]
+        self.out_ranks = [(4,)]
+
+    def requires(self, itensors: List[AbsTensor]) -> List[Union[z3.BoolRef, bool]]:
+        ret = []
+        ret.append(nnsmith_ge(self.kernel_h_size, 1))
+        ret.append(nnsmith_ge(self.kernel_w_size, 1))
+        ret.append(
+            nnsmith_le(
+                self.kernel_h_size,
+                nnsmith_add(itensors[0].shape[2], 2 * self.padding),
+            )
+        )
+        ret.append(
+            nnsmith_le(
+                self.kernel_w_size,
+                nnsmith_add(itensors[0].shape[3], 2 * self.padding),
+            )
+        )
+        ret.append(nnsmith_ge(self.stride, 1))
+        ret.append(nnsmith_ge(self.padding, 0))
+        ret.append(nnsmith_le(self.padding, 255)) # No too extreme padding
+        ret.append(nnsmith_le(self.padding, nnsmith_div(self.kernel_h_size, 2)))
+        ret.append(nnsmith_le(self.padding, nnsmith_div(self.kernel_w_size, 2)))
+        return ret
 # END
 
 # {api}
@@ -334,7 +354,7 @@ class MatMul(BinaryOpBase):
             Step(
                 prompter=lambda code: f"""\
 # torch.flatten
-class Flatten(UnaryOpBase):
+class Flatten(AbsOpBase):
     in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
     out_dtypes = [(i,) for i in DTYPE_GEN_ALL]
 
@@ -347,6 +367,12 @@ class Flatten(UnaryOpBase):
         self.out_ranks = [(1,)]
 
     def type_transfer(self, itensors: List[AbsTensor]) -> List[AbsTensor]:
+        '''Examples:
+        >>> x = torch.randn(2, 3, 4, dtype=torch.float32)
+        >>> output = torch.flatten(x)
+        >>> (output.size(), output.dtype)
+        (torch.Size([24]), torch.float32)
+        '''
         inp = itensors[0]
         return [
             AbsTensor(
@@ -354,7 +380,7 @@ class Flatten(UnaryOpBase):
                 dtype=inp.dtype,
             )
         ]
-    
+
     def deduct_inp_ranks_and_dtype(
         self, out_abs_tensor: List[AbsTensor]
     ) -> List[Tuple[int, DType]]:
@@ -363,7 +389,7 @@ class Flatten(UnaryOpBase):
 # END
 
 # torch.nn.BatchNorm2d
-class BatchNorm2d(ElementWiseUnaryOp):
+class BatchNorm2d(AbsOpBase):
     in_dtypes = [(DType.float32,)]
     out_dtypes = [(DType.float32,)]
 
@@ -375,12 +401,16 @@ class BatchNorm2d(ElementWiseUnaryOp):
         self.inp_ranks = [(4,)]
         self.out_ranks = [(4,)]
 
-    def requires(self, itensors: List[AbsTensor]) -> List[Union[z3.BoolRef, bool]]:
-        return [
-            nnsmith_eq(self.nfeat, itensors[0].shape[1]),
-            nnsmith_ge(itensors[0].shape[0], 2),
-        ]
-    
+    def type_transfer(self, itensors: List[AbsTensor]) -> List[AbsTensor]:
+        '''Examples:
+        >>> m = nn.BatchNorm2d(100)
+        >>> x = torch.randn(20, 100, 35, 45, dtype=torch.float32)
+        >>> output = m(x)
+        >>> (output.size(), output.dtype)
+        (torch.Size([20, 100, 35, 45]), torch.float32)
+        '''
+        return [AbsTensor(itensors[0].shape, itensors[0].dtype)]
+
     def deduct_inp_ranks_and_dtype(
         self, out_abs_tensor: List[AbsTensor]
     ) -> List[Tuple[int, DType]]:
@@ -388,7 +418,7 @@ class BatchNorm2d(ElementWiseUnaryOp):
 # END
 
 # torch.nn.functional.relu
-class ReLU(UnaryOpBase):
+class ReLU(AbsOpBase):
     in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
     out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
@@ -401,12 +431,83 @@ class ReLU(UnaryOpBase):
         self.out_ranks = [rank_all()]
 
     def type_transfer(self, itensors: List[AbsTensor]) -> List[AbsTensor]:
+        '''Examples:
+        >>> input = torch.randn(2, dtype=torch.float32)
+        >>> output = torch.nn.functional.relu(input)
+        >>> (output.size(), output.dtype)
+        (torch.Size([2]), torch.float32)
+        '''
         return [AbsTensor(itensors[0].shape, itensors[0].dtype)]
 
     def deduct_inp_ranks_and_dtype(
         self, out_abs_tensor: List[AbsTensor]
     ) -> List[Tuple[int, DType]]:
         return [(out_abs_tensor[0].ndims, out_abs_tensor[0].dtype)]
+# END
+
+# torch.nn.MaxPool2d
+class MaxPool2d(AbsOpBase):
+    in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+    out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
+
+    def __init__(
+        self,
+        kernel_h_size,
+        kernel_w_size,
+        stride,
+        padding,
+    ):
+        super().__init__()
+        # attributes
+        self.kernel_h_size = kernel_h_size
+        self.kernel_w_size = kernel_w_size
+        self.stride = stride
+        self.padding = padding
+        # input/output ranks
+        self.inp_ranks = [(4,)]
+        self.out_ranks = [(4,)]
+
+    def type_transfer(self, itensors: List[AbsTensor]) -> List[AbsTensor]:
+        '''Examples:
+        >>> input = torch.randn(20, 16, 50, 32, dtype=torch.float32)
+        >>> m = nn.MaxPool2d(3, stride=2)
+        >>> output = m(input)
+        >>> (output.size(), output.dtype)
+        (torch.Size([20, 16, 24, 15]), torch.float32)
+        '''
+        abs_tensor = AbsTensor([], dtype=itensors[0].dtype)
+        abs_tensor.shape.append(itensors[0].shape[0])
+        abs_tensor.shape.append(itensors[0].shape[1])
+        abs_tensor.shape.append(
+            (
+                nnsmith_div(
+                    nnsmith_add(
+                        nnsmith_sub(itensors[0].shape[2], self.kernel_h_size),
+                        2 * self.padding,
+                    ),
+                    self.stride,
+                )
+                + 1
+            )
+        )
+        abs_tensor.shape.append(
+            (
+                nnsmith_div(
+                    nnsmith_add(
+                        nnsmith_sub(itensors[0].shape[3], self.kernel_w_size),
+                        2 * self.padding,
+                    ),
+                    self.stride,
+                )
+                + 1
+            )
+        )
+        return [abs_tensor]
+
+    def deduct_inp_ranks_and_dtype(
+        self, out_abs_tensor: List[AbsTensor]
+    ) -> List[Tuple[int, DType]]:
+        return [(4, out_abs_tensor[0].dtype)]
 # END
 
 # {api}
@@ -433,7 +534,7 @@ class ReLU(UnaryOpBase):
             Step(
                 prompter=lambda code: f"""\
 # torch.flatten
-class Flatten(UnaryOpBase):
+class Flatten(AbsOpBase):
     def __init__(self):
         super().__init__()
         # attributes
@@ -461,7 +562,7 @@ def forward_fn(op: BatchNorm2d) -> Callable:
 # END
 
 # torch.nn.functional.relu
-class ReLU(UnaryOpBase):
+class ReLU(AbsOpBase):
     def __init__(self):
         super().__init__()
         # attributes
@@ -475,7 +576,7 @@ def forward_fn(op: ReLU) -> Callable:
 # END
 
 # torch.matmul
-class MatMul(BinaryOpBase):
+class MatMul(AbsOpBase):
     def __init__(self):
         super().__init__()
         # attributes
@@ -489,7 +590,7 @@ def forward_fn(op: MatMul) -> Callable:
 # END
 
 # torch.nn.MaxPool2d
-class MaxPool2d(UnaryOpBase):
+class MaxPool2d(AbsOpBase):
     in_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
     out_dtypes = [(i,) for i in DTYPE_GEN_FLOATS]
 
@@ -519,7 +620,7 @@ def forward_fn(op: MaxPool2d) -> Callable:
 # END
 
 # torch.Tensor.tril
-class Tril(UnaryOpBase):
+class Tril(AbsOpBase):
     in_dtypes = [(i,) for i in DTYPE_GEN_ALL]
     out_dtypes = [(i,) for i in DTYPE_GEN_ALL]
 
@@ -544,6 +645,41 @@ def forward_fn(op:""",
                     if l.strip() and not l.strip().startswith("#")
                 ),
                 eos=["\n# END"],
+                validator=None,
+            )
+        )
+
+        # step 5: code repair
+        # - zero-shot
+        steps.append(
+            Step(
+                prompter=lambda code: f"""\
+## Instruction
+
+Please rewrite the python code using `nnsmith` operators for symbolic computation in `requires` and `type_transfer`:
+- z3expr and z3expr => nnsmith_and(z3expr, z3expr)
+- z3expr or z3expr => nnsmith_or(z3expr, z3expr)
+- not z3expr => nnsmith_not(z3expr)
+- z3expr // z3expr => nnsmith_div(z3expr, z3expr)
+- z3expr % z3expr => nnsmith_mod(z3expr, z3expr)
+- max(z3expr, z3expr) => nnsmith_max(z3expr, z3expr)
+- min(z3expr, z3expr) => nnsmith_min(z3expr, z3expr)
+
+```python
+# {api}
+{code.split('    def deduct_inp_ranks_and_dtype(')[0]}
+```
+
+## Response
+
+```python
+# {api}
+""",
+                composer=lambda prmpt, cmpln, old: f"# {api}\n"
+                + cmpln.rstrip("\n```")
+                + "\n    def deduct_inp_ranks_and_dtype("
+                + old.split("    def deduct_inp_ranks_and_dtype(")[-1],
+                eos=["\n```"],
                 validator=None,
             )
         )

@@ -29,6 +29,10 @@ BLOCK_LIST = [
     "torch.where",
     "torch.tan",
     "torch.mul",
+    "torch.clip",
+    "torch.cat",
+    "torch.tril",
+    "torch.triu",
 ]
 
 
@@ -56,16 +60,16 @@ if __name__ == "__main__":
     for root in DOC_ROOTS:
         r = requests.get(root)
         regex = re.compile(
-            r'<tr class="row-odd"><td><p><p id="(.*)"/><a class="reference internal" href="(.*)" title="(.*)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">(.*)</span></code></a></p></td>'
+            r'<tr class="row-(.*)"><td><p><p id="(.*)"/><a class="reference internal" href="(.*)" title="(.*)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">(.*)</span></code></a></p></td>'
         )
         matches = regex.findall(r.text)
         for match in matches:
-            api: str = match[0]
+            api: str = match[1]
             if api.endswith("_"):
                 continue  # skip
             if api in BLOCK_LIST:
                 continue  # skip
-            doc = parse_doc(f"https://pytorch.org/docs/stable/{match[1]}")
+            doc = parse_doc(f"https://pytorch.org/docs/stable/{match[2]}")
             if doc is None:
                 continue
             docs[api] = doc

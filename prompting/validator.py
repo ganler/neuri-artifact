@@ -4,6 +4,8 @@ import ast
 from typing import Callable, List, Optional, Tuple, Union, Type
 import traceback
 
+from termcolor import colored
+
 from neuri.abstract.arith import *
 from neuri.abstract.op import *
 from neuri.materialize.torch.symbolnet import random_tensor
@@ -102,7 +104,8 @@ if __name__ == "__main__":
 
     specs = dict()
 
-    for sample_path in sorted(os.listdir(args.path)):
+    paths = sorted(os.listdir(args.path))
+    for sample_path in paths:
         abs_sample_path = os.path.join(args.path, sample_path)
         with open(abs_sample_path, "r") as f:
             content = f.read()
@@ -141,8 +144,9 @@ if __name__ == "__main__":
                 SpecCode(cls_name, spec, fwd_code, dbg_info)
             )
 
+    print(colored(f"Compilability: {len(specs)} / {len(paths)} spec types", "yellow"))
     print(
-        f"Found {len(specs)} spec classes ~ {sum(len(l) for l in specs.values())} samples"
+        f"Found {len(specs)} spec classes and {sum(len(l) for l in specs.values())} total samples"
     )
 
     print("--- dynamically check consistency ...")
@@ -153,8 +157,9 @@ if __name__ == "__main__":
             try:
                 test_spec_consistency(s)
                 tested_specs.setdefault(cls_name, []).append(s)
+                print(colored(f"--- Validated: {cls_name}", "green"))
             except Exception as e:
-                print(f"--- Failed to check consistency: {cls_name}")
+                print(colored(f"--- Failed to check consistency: {cls_name}", "red"))
                 print(f"--- Sample path: {s.dbg_info}")
                 traceback.print_exc()
 
